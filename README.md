@@ -122,7 +122,8 @@ See [`CHANGELOG.md`](CHANGELOG.md)
 
 ## 🎥 Video Tutorials
 
-- [https://www.bilibili.com/video/BV1Mo4y1a7DF](https://www.bilibili.com/video/BV1rY4y1C7Q5](https://www.bilibili.com/video/BV1rY4y1C7Q5)
+- https://www.bilibili.com/video/BV1Mo4y1a7DF
+- https://www.bilibili.com/video/BV1rY4y1C7Q5
 
 ## 💬 Community
 
