@@ -3,7 +3,10 @@ import platform
 import cv2
 import numpy
 import imageio
+import logging
+from scripts.m2m_audio import get_audio, cleanup_audio
 
+logger = logging.getLogger("m2m_util")
 
 def calc_video_w_h(video_path):
     cap = cv2.VideoCapture(video_path)
@@ -55,7 +58,7 @@ def get_mov_all_images(file, frames, rgb=False):
 
     fps = cap.get(cv2.CAP_PROP_FPS)
     if frames > fps:
-        print('Waring: The set number of frames is greater than the number of video frames')
+        logger.warning(["[m2m_util]: The set number of frames is greater than the number of video frames"])
         frames = int(fps)
 
     skip = fps // frames
@@ -77,10 +80,10 @@ def get_mov_all_images(file, frames, rgb=False):
     return image_list
 
 
-def images_to_video(images, frames, out_path):
+def images_to_video(images, frames, out_path, file, audio, reuse_audio):
     if platform.system() == 'Windows':
         # Use imageio with the 'libx264' codec on Windows
-        return images_to_video_imageio(images, frames, out_path, 'libx264')
+        return images_to_video_imageio(images, frames, out_path, 'libx264', file, audio, reuse_audio)
     elif platform.system() == 'Darwin':
         # Use cv2 with the 'avc1' codec on Mac
         return images_to_video_cv2(images, frames, out_path, 'avc1')
@@ -89,14 +92,20 @@ def images_to_video(images, frames, out_path):
         return images_to_video_cv2(images, frames, out_path, 'mp4v')
 
 
-def images_to_video_imageio(images, frames, out_path, codec):
+def images_to_video_imageio(images, frames, out_path, codec, file, audio, reuse_audio):
     # 判断out_path是否存在,不存在则创建
     if not os.path.exists(os.path.dirname(out_path)):
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    with imageio.v2.get_writer(out_path, format='ffmpeg', mode='I', fps=frames, codec=codec) as writer:
+    audio_path, should_cleanup_audio = get_audio(file, audio, reuse_audio)
+
+    with imageio.v2.get_writer(out_path, format='ffmpeg', mode='I', fps=frames, codec=codec, audio_path=audio_path) as writer:
         for img in images:
             writer.append_data(numpy.asarray(img))
+
+    if should_cleanup_audio:
+        cleanup_audio()
+
     return out_path
 
 

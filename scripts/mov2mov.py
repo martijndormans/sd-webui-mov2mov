@@ -4,6 +4,7 @@ import platform
 import time
 import gradio as gr
 import PIL.Image
+import logging
 from tqdm import tqdm
 
 from ebsynth.ebsynth_generate import EbsynthGenerate
@@ -30,6 +31,8 @@ from ebsynth import Keyframe
 from modules.processing import Processed
 from modules.shared import opts
 
+logger = logging.getLogger("mov2mov")
+
 scripts_mov2mov = scripts.ScriptRunner()
 
 
@@ -44,7 +47,7 @@ def check_data_frame(df: pandas.DataFrame):
     return True
 
 
-def save_video(images, fps, extension=".mp4"):
+def save_video(images, fps, mov_file, audio, reuse_audio, extension=".mp4",):
     if not os.path.exists(
         shared.opts.data.get("mov2mov_output_dir", mov2mov_output_dir)
     ):
@@ -55,7 +58,7 @@ def save_video(images, fps, extension=".mp4"):
 
     r_f = extension
 
-    print(f"Start generating {r_f} file")
+    logger.info(f"[mov2mov] Start generating {r_f} file")
 
     video = images_to_video(
         images,
@@ -64,20 +67,24 @@ def save_video(images, fps, extension=".mp4"):
             shared.opts.data.get("mov2mov_output_dir", mov2mov_output_dir),
             str(int(time.time())) + r_f,
         ),
+        mov_file,
+        audio,
+        reuse_audio
     )
-    print(f"The generation is complete, the directory::{video}")
+
+    logger.info(f"[mov2mov] The generation is complete, the directory::{video}")
 
     return video
 
 
-def process_mov2mov(p, mov_file, movie_frames, max_frames, resize_mode, w, h, args):
+def process_mov2mov(p, mov_file, movie_frames, max_frames, resize_mode, w, h, audio, reuse_audio, args):
     processing.fix_seed(p)
     images = get_mov_all_images(mov_file, movie_frames)
     if not images:
-        print("Failed to parse the video, please check")
+        logger.warning("[mov2mov] Failed to parse the video, please check")
         return
 
-    print(f"The video conversion is completed, images:{len(images)}")
+    logger.info(f"[mov2mov] The video conversion is completed, images:{len(images)}")
     if max_frames == -1 or max_frames > len(images):
         max_frames = len(images)
 
@@ -109,7 +116,7 @@ def process_mov2mov(p, mov_file, movie_frames, max_frames, resize_mode, w, h, ar
             gen_image = processed.images[0]
             generate_images.append(gen_image)
 
-    video = save_video(generate_images, movie_frames)
+    video = save_video(generate_images, movie_frames, mov_file, audio, reuse_audio)
 
     return video
 
@@ -118,7 +125,7 @@ def process_keyframes(p, mov_file, fps, df, args):
     processing.fix_seed(p)
     images = get_mov_all_images(mov_file, fps)
     if not images:
-        print("Failed to parse the video, please check")
+        logger.warning("[mov2mov] Failed to parse the video, please check")
         return
 
     # 通过宽高,缩放模式,预处理图片
@@ -156,8 +163,8 @@ def process_keyframes(p, mov_file, fps, df, args):
             gen_image = processed.images[0]
 
             if gen_image.height != p.height or gen_image.width != p.width:
-                print(
-                    f"Warning: The generated image size is inconsistent with the original image size, "
+                logger.warning(
+                    f"[mov2mov] The generated image size is inconsistent with the original image size, "
                     f"please check the configuration parameters"
                 )
                 gen_image = gen_image.resize((p.width, p.height))
@@ -200,7 +207,7 @@ def process_mov2mov_ebsynth(p, eb_generate, weight=4.0):
         eb_generate.append_generate_frames(task.key_frame_num, task.frame_num, result)
         state.nextjob()
 
-    print(f"Start merge frames")
+    logger.info(f"[mov2mov] Start merge frames")
     result = eb_generate.merge_sequences()
     video = save_video(result, eb_generate.fps)
     return video
@@ -229,6 +236,9 @@ def mov2mov(
     noise_multiplier,
     movie_frames,
     max_frames,
+    # mov2mov audio params
+    reuse_audio,
+    audio,
     # editor
     enable_movie_editor,
     df: pandas.DataFrame,
@@ -289,7 +299,7 @@ def mov2mov(
         if not enable_movie_editor:
             print(f"\nStart parsing the number of mov frames")
             generate_video = process_mov2mov(
-                p, mov_file, movie_frames, max_frames, resize_mode, width, height, args
+                p, mov_file, movie_frames, max_frames, resize_mode, width, height, audio, reuse_audio, args
             )
             processed = Processed(p, [], p.seed, "")
         else:
@@ -307,10 +317,10 @@ def mov2mov(
             df = df.sort_values(by="frame").reset_index(drop=True)
 
             # generate keyframes
-            print(f"Start generate keyframes")
+            logging.info(f"[mov2mov] Start generate keyframes")
             keyframes, frames = process_keyframes(p, mov_file, movie_frames, df, args)
             eb_generate = EbsynthGenerate(keyframes, frames, movie_frames)
-            print(f"\nStart generate frames")
+            logging.info(f"\nStart generate frames")
 
             generate_video = process_mov2mov_ebsynth(p, eb_generate, weight=eb_weight)
 

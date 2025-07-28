@@ -274,6 +274,14 @@ def on_ui_tabs():
                         with gr.Row(
                             elem_id=f"{id_part}_accordions", elem_classes="accordions"
                         ):
+                            with gr.Accordion(label="Audio Layer", elem_id=f"{id_part}_audio_accordion", open=False):
+                                reuse_audio = gr.Checkbox(label="Reuse audio from input video", elem_id=f"{id_part}_reuse_audio", value=True)
+                                audio = gr.Audio(label="Audio for mov2mov", elem_id=f"{id_part}_audio", source="upload", visible=False)
+                                reuse_audio.change(
+                                    lambda checked: gr.update(visible=not checked),
+                                    inputs=reuse_audio,
+                                    outputs=audio,
+                                )
                             scripts_mov2mov.setup_ui_for_section(category)
 
                     elif category == "override_settings":
@@ -317,6 +325,9 @@ def on_ui_tabs():
                     noise_multiplier,
                     movie_frames,
                     max_frames,
+                    # mov2mov audio params
+                    reuse_audio,
+                    audio,
                     # editor
                     editor.gr_enable_movie_editor,
                     editor.gr_df,
