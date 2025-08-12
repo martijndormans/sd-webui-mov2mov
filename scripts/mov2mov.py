@@ -30,6 +30,7 @@ import modules
 from ebsynth import Keyframe
 from modules.processing import Processed
 from modules.shared import opts
+from scripts.m2m_audio import get_audio, cleanup_audio
 
 logger = logging.getLogger("mov2mov")
 
@@ -58,7 +59,7 @@ def save_video(images, fps, mov_file, audio, reuse_audio, extension=".mp4",):
 
     r_f = extension
 
-    logger.info(f"[mov2mov] Start generating {r_f} file")
+    logger.info(f"Start generating {r_f} file")
 
     video = images_to_video(
         images,
@@ -72,7 +73,7 @@ def save_video(images, fps, mov_file, audio, reuse_audio, extension=".mp4",):
         reuse_audio
     )
 
-    logger.info(f"[mov2mov] The generation is complete, the directory::{video}")
+    logger.info(f"The generation is complete, the directory::{video}")
 
     return video
 
@@ -81,10 +82,10 @@ def process_mov2mov(p, mov_file, movie_frames, max_frames, resize_mode, w, h, au
     processing.fix_seed(p)
     images = get_mov_all_images(mov_file, movie_frames)
     if not images:
-        logger.warning("[mov2mov] Failed to parse the video, please check")
+        logger.warning("Failed to parse the video, please check")
         return
 
-    logger.info(f"[mov2mov] The video conversion is completed, images:{len(images)}")
+    logger.info(f"The video conversion is completed, images:{len(images)}")
     if max_frames == -1 or max_frames > len(images):
         max_frames = len(images)
 
@@ -125,7 +126,7 @@ def process_keyframes(p, mov_file, fps, df, args):
     processing.fix_seed(p)
     images = get_mov_all_images(mov_file, fps)
     if not images:
-        logger.warning("[mov2mov] Failed to parse the video, please check")
+        logger.warning("Failed to parse the video, please check")
         return
 
     # 通过宽高,缩放模式,预处理图片
@@ -164,7 +165,7 @@ def process_keyframes(p, mov_file, fps, df, args):
 
             if gen_image.height != p.height or gen_image.width != p.width:
                 logger.warning(
-                    f"[mov2mov] The generated image size is inconsistent with the original image size, "
+                    f"The generated image size is inconsistent with the original image size, "
                     f"please check the configuration parameters"
                 )
                 gen_image = gen_image.resize((p.width, p.height))
@@ -207,7 +208,7 @@ def process_mov2mov_ebsynth(p, eb_generate, weight=4.0):
         eb_generate.append_generate_frames(task.key_frame_num, task.frame_num, result)
         state.nextjob()
 
-    logger.info(f"[mov2mov] Start merge frames")
+    logger.info(f"Start merge frames")
     result = eb_generate.merge_sequences()
     video = save_video(result, eb_generate.fps)
     return video
@@ -317,7 +318,7 @@ def mov2mov(
             df = df.sort_values(by="frame").reset_index(drop=True)
 
             # generate keyframes
-            logging.info(f"[mov2mov] Start generate keyframes")
+            logging.info(f"Start generate keyframes")
             keyframes, frames = process_keyframes(p, mov_file, movie_frames, df, args)
             eb_generate = EbsynthGenerate(keyframes, frames, movie_frames)
             logging.info(f"\nStart generate frames")

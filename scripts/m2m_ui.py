@@ -31,6 +31,7 @@ from scripts.m2m_config import mov2mov_outpath_samples, mov2mov_output_dir
 from scripts.mov2mov import scripts_mov2mov
 from scripts.movie_editor import MovieEditor
 from scripts.m2m_ui_common import create_output_panel
+from scripts.audio_transformers.voice_pitcher import generate_pitched_audio
 
 id_part = "mov2mov"
 
@@ -275,13 +276,30 @@ def on_ui_tabs():
                             elem_id=f"{id_part}_accordions", elem_classes="accordions"
                         ):
                             with gr.Accordion(label="Audio Layer", elem_id=f"{id_part}_audio_accordion", open=False):
-                                reuse_audio = gr.Checkbox(label="Reuse audio from input video", elem_id=f"{id_part}_reuse_audio", value=True)
-                                audio = gr.Audio(label="Audio for mov2mov", elem_id=f"{id_part}_audio", source="upload", visible=False)
-                                reuse_audio.change(
+                                reuse_audio_input = gr.Checkbox(label="Reuse audio from input video", elem_id=f"{id_part}_reuse_audio", value=True)
+                                new_audio = gr.Audio(label="Audio for mov2mov", elem_id=f"{id_part}_audio", source="upload", visible=False)
+                                reuse_audio_input.change(
                                     lambda checked: gr.update(visible=not checked),
-                                    inputs=reuse_audio,
-                                    outputs=audio,
+                                    inputs=reuse_audio_input,
+                                    outputs=new_audio,
                                 )
+                                with gr.Row():
+                                    pitch_audio = gr.Checkbox(label="Pitch audio", elem_id=f"{id_part}_pitch_audio", value=False)
+                                    pitch_step = gr.Number(label="Pitch step (default is 1)", minimum=0, maximum=3, value=1, precision=None, elem_id=f"{id_part}_pitch_step")
+                                    pitched_audio = gr.Audio(label="Pitched Audio", type="filepath", elem_id=f"{id_part}_pitched_audio")
+
+                                    # Bind events
+                                    pitch_audio.change(
+                                        fn=generate_pitched_audio,
+                                        inputs=[init_mov, new_audio, reuse_audio_input, pitch_step],
+                                        outputs=pitched_audio
+                                    )
+
+                                    pitch_step.change(
+                                        fn=generate_pitched_audio,
+                                        inputs=[init_mov, new_audio, reuse_audio_input, pitch_step],
+                                        outputs=pitched_audio
+                                    )
                             scripts_mov2mov.setup_ui_for_section(category)
 
                     elif category == "override_settings":
@@ -300,6 +318,8 @@ def on_ui_tabs():
                         scripts_mov2mov.setup_ui_for_section(category)
 
             output_panel = create_output_panel(id_part, opts.mov2mov_output_dir)
+            audio = pitched_audio if pitch_audio == True else new_audio
+            reuse_audio = False if pitch_audio == True else reuse_audio_input
             mov2mov_args = dict(
                 fn=wrap_gradio_gpu_call(mov2mov.mov2mov, extra_outputs=[None, "", ""]),
                 _js="submit_mov2mov",

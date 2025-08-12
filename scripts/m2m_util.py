@@ -58,7 +58,7 @@ def get_mov_all_images(file, frames, rgb=False):
 
     fps = cap.get(cv2.CAP_PROP_FPS)
     if frames > fps:
-        logger.warning(["[m2m_util]: The set number of frames is greater than the number of video frames"])
+        logger.warning(["The set number of frames is greater than the number of video frames"])
         frames = int(fps)
 
     skip = fps // frames

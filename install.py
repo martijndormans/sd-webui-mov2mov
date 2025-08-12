@@ -17,3 +17,11 @@ else:
     if not launch.is_installed('ffmpeg'):
         print('Installing requirements for Mov2mov')
         launch.run_pip("install ffmpeg", "requirements for ffmpeg")
+
+if not launch.is_installed('librosa'):
+    print('Installing requirements for Mov2mov')
+    launch.run_pip("install librosa", "requirements for librosa")
+
+if not launch.is_installed('soundfile'):
+    print('Installing requirement for Mov2mov')
+    launch.run_pip("install soundfile", "requirements for soundfile")

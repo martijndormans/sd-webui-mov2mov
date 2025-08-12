@@ -14,7 +14,7 @@ def get_audio(video_path, audio, reuse_audio):
         audio_path = video_path
     else:
         if not audio:
-            logger.warning("[m2m_audio] No audio provided.")
+            logger.warning("No audio provided.")
             return
         if isinstance(audio, str) and os.path.isfile(audio):
             audio_path = audio
@@ -48,7 +48,7 @@ def get_audio(video_path, audio, reuse_audio):
                     wf.setframerate(44100)
                     wf.writeframes(data.tobytes())
         else:
-            logger.error(f"[m2m_audio] Unsupported audio input type: {type(audio)}")
+            logger.error(f"Unsupported audio input type: {type(audio)}")
             return
     return [audio_path, should_cleanup_audio]
 
