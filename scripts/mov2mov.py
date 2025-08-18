@@ -30,7 +30,7 @@ import modules
 from ebsynth import Keyframe
 from modules.processing import Processed
 from modules.shared import opts
-from scripts.m2m_audio import get_audio, cleanup_audio
+from scripts.m2m_audio import choose_audio
 
 logger = logging.getLogger("mov2mov")
 
@@ -59,7 +59,7 @@ def save_video(images, fps, mov_file, audio, reuse_audio, extension=".mp4",):
 
     r_f = extension
 
-    logger.info(f"Start generating {r_f} file")
+    logging.info(f"Start generating {r_f} file")
 
     video = images_to_video(
         images,
@@ -73,7 +73,7 @@ def save_video(images, fps, mov_file, audio, reuse_audio, extension=".mp4",):
         reuse_audio
     )
 
-    logger.info(f"The generation is complete, the directory::{video}")
+    logging.info(f"The generation is complete, the directory::{video}")
 
     return video
 
@@ -85,7 +85,7 @@ def process_mov2mov(p, mov_file, movie_frames, max_frames, resize_mode, w, h, au
         logger.warning("Failed to parse the video, please check")
         return
 
-    logger.info(f"The video conversion is completed, images:{len(images)}")
+    logging.info(f"The video conversion is completed, images:{len(images)}")
     if max_frames == -1 or max_frames > len(images):
         max_frames = len(images)
 
@@ -208,7 +208,7 @@ def process_mov2mov_ebsynth(p, eb_generate, weight=4.0):
         eb_generate.append_generate_frames(task.key_frame_num, task.frame_num, result)
         state.nextjob()
 
-    logger.info(f"Start merge frames")
+    logging.info(f"Start merge frames")
     result = eb_generate.merge_sequences()
     video = save_video(result, eb_generate.fps)
     return video
@@ -238,6 +238,8 @@ def mov2mov(
     movie_frames,
     max_frames,
     # mov2mov audio params
+    pitch_audio,
+    pitched_audio,
     reuse_audio,
     audio,
     # editor
@@ -298,9 +300,10 @@ def mov2mov(
 
     with closing(p):
         if not enable_movie_editor:
+            final_audio, final_reuse_audio = choose_audio(pitch_audio, pitched_audio, reuse_audio, audio)
             print(f"\nStart parsing the number of mov frames")
             generate_video = process_mov2mov(
-                p, mov_file, movie_frames, max_frames, resize_mode, width, height, audio, reuse_audio, args
+                p, mov_file, movie_frames, max_frames, resize_mode, width, height, final_audio, final_reuse_audio, args
             )
             processed = Processed(p, [], p.seed, "")
         else:

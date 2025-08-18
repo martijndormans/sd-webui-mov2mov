@@ -276,12 +276,12 @@ def on_ui_tabs():
                             elem_id=f"{id_part}_accordions", elem_classes="accordions"
                         ):
                             with gr.Accordion(label="Audio Layer", elem_id=f"{id_part}_audio_accordion", open=False):
-                                reuse_audio_input = gr.Checkbox(label="Reuse audio from input video", elem_id=f"{id_part}_reuse_audio", value=True)
-                                new_audio = gr.Audio(label="Audio for mov2mov", elem_id=f"{id_part}_audio", source="upload", visible=False)
-                                reuse_audio_input.change(
+                                reuse_audio = gr.Checkbox(label="Reuse audio from input video", elem_id=f"{id_part}_reuse_audio", value=True)
+                                audio = gr.Audio(label="Audio for mov2mov", elem_id=f"{id_part}_audio", source="upload", visible=False)
+                                reuse_audio.change(
                                     lambda checked: gr.update(visible=not checked),
-                                    inputs=reuse_audio_input,
-                                    outputs=new_audio,
+                                    inputs=reuse_audio,
+                                    outputs=audio,
                                 )
                                 with gr.Row():
                                     pitch_audio = gr.Checkbox(label="Pitch audio", elem_id=f"{id_part}_pitch_audio", value=False)
@@ -291,13 +291,13 @@ def on_ui_tabs():
                                     # Bind events
                                     pitch_audio.change(
                                         fn=generate_pitched_audio,
-                                        inputs=[init_mov, new_audio, reuse_audio_input, pitch_step],
+                                        inputs=[init_mov, audio, reuse_audio, pitch_step],
                                         outputs=pitched_audio
                                     )
 
                                     pitch_step.change(
                                         fn=generate_pitched_audio,
-                                        inputs=[init_mov, new_audio, reuse_audio_input, pitch_step],
+                                        inputs=[init_mov, audio, reuse_audio, pitch_step],
                                         outputs=pitched_audio
                                     )
                             scripts_mov2mov.setup_ui_for_section(category)
@@ -318,8 +318,6 @@ def on_ui_tabs():
                         scripts_mov2mov.setup_ui_for_section(category)
 
             output_panel = create_output_panel(id_part, opts.mov2mov_output_dir)
-            audio = pitched_audio if pitch_audio == True else new_audio
-            reuse_audio = False if pitch_audio == True else reuse_audio_input
             mov2mov_args = dict(
                 fn=wrap_gradio_gpu_call(mov2mov.mov2mov, extra_outputs=[None, "", ""]),
                 _js="submit_mov2mov",
@@ -346,6 +344,8 @@ def on_ui_tabs():
                     movie_frames,
                     max_frames,
                     # mov2mov audio params
+                    pitch_audio,
+                    pitched_audio,
                     reuse_audio,
                     audio,
                     # editor

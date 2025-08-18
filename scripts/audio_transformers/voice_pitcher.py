@@ -7,7 +7,7 @@ from scripts.m2m_audio import get_audio
 logger = logging.getLogger("voice_pitcher")
 
 def generate_pitched_audio(init_mov, audio_path, reuse_audio, pitch_steps):
-    logger.info("Starting pitch transformation")
+    logging.info("Starting pitch transformation")
 
     pitched_audio_path = None
     audio_path, should_cleanup_audio = get_audio(init_mov, audio_path, reuse_audio)
@@ -23,5 +23,5 @@ def generate_pitched_audio(init_mov, audio_path, reuse_audio, pitch_steps):
             logger.warning("Something went wrong when trying to transform the audio")
             return None
 
-    logger.info("Pitch transformation complete")
+    logging.info("Pitch transformation complete")
     return pitched_audio_path
