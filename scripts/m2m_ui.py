@@ -300,6 +300,9 @@ def on_ui_tabs():
                                         inputs=[init_mov, audio, reuse_audio, pitch_step],
                                         outputs=pitched_audio
                                     )
+                            with gr.Accordion(label="Watermark/Overlay", elem_id=f"{id_part}_overlay_accordion", open=False):
+                                use_overlay = gr.Checkbox(label="Use overlay/watermark", elem_id=f"{id_part}_use_overlay", value=False)
+                                overlay_image = gr.Image(label="Overlay/watermark image", elem_id=f"{id_part}_overlay_image", source="upload", visible=True, height=300)
                             scripts_mov2mov.setup_ui_for_section(category)
 
                     elif category == "override_settings":
