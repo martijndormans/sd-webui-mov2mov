@@ -31,6 +31,7 @@ from ebsynth import Keyframe
 from modules.processing import Processed
 from modules.shared import opts
 from scripts.m2m_audio import choose_audio
+from scripts.m2m_overlay import overlay_watermark_on_video
 
 logger = logging.getLogger("mov2mov")
 
@@ -242,6 +243,11 @@ def mov2mov(
     pitched_audio,
     reuse_audio,
     audio,
+    # mov2mov overlay params
+    use_overlay,
+    overlay_image,
+    overlay_bottom_right,
+    overlay_bottom_left,
     # editor
     enable_movie_editor,
     df: pandas.DataFrame,
@@ -305,6 +311,8 @@ def mov2mov(
             generate_video = process_mov2mov(
                 p, mov_file, movie_frames, max_frames, resize_mode, width, height, final_audio, final_reuse_audio, args
             )
+            if use_overlay:
+                overlay_watermark_on_video(generate_video, overlay_image, 'TODO add shit')
             processed = Processed(p, [], p.seed, "")
         else:
             # editor

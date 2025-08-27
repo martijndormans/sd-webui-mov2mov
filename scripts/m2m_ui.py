@@ -303,6 +303,8 @@ def on_ui_tabs():
                             with gr.Accordion(label="Watermark/Overlay", elem_id=f"{id_part}_overlay_accordion", open=False):
                                 use_overlay = gr.Checkbox(label="Use overlay/watermark", elem_id=f"{id_part}_use_overlay", value=False)
                                 overlay_image = gr.Image(label="Overlay/watermark image", elem_id=f"{id_part}_overlay_image", source="upload", visible=True, height=300)
+                                overlay_bottom_right = gr.Checkbox(label="Put overlay on bottom right (default)", elem_id=f"{id_part}_overlay_bottom_right", value=True)
+                                overlay_bottom_left = gr.Checkbox(label="Put overlay on bottom left", elem_id=f"{id_part}_overlay_bottom_left", value=False)
                             scripts_mov2mov.setup_ui_for_section(category)
 
                     elif category == "override_settings":
@@ -351,6 +353,11 @@ def on_ui_tabs():
                     pitched_audio,
                     reuse_audio,
                     audio,
+                    #mov2mov overlay params
+                    use_overlay,
+                    overlay_image,
+                    overlay_bottom_right,
+                    overlay_bottom_left,
                     # editor
                     editor.gr_enable_movie_editor,
                     editor.gr_df,
