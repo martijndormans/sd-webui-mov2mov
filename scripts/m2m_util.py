@@ -1,12 +1,16 @@
 import os.path
 import platform
 import cv2
+import time
 import numpy
 import imageio
 import logging
-from scripts.m2m_audio import get_audio, cleanup_audio
+from modules.shared import opts
+from scripts.m2m_config import mov2mov_output_dir
+from scripts.features.audio.audio import get_audio, cleanup_audio
 
 logger = logging.getLogger("m2m_util")
+
 
 def calc_video_w_h(video_path):
     cap = cv2.VideoCapture(video_path)
@@ -58,14 +62,16 @@ def get_mov_all_images(file, frames, rgb=False):
 
     fps = cap.get(cv2.CAP_PROP_FPS)
     if frames > fps:
-        logger.warning(["The set number of frames is greater than the number of video frames"])
+        logger.warning(
+            ["The set number of frames is greater than the number of video frames"]
+        )
         frames = int(fps)
 
     skip = fps // frames
     count = 1
     fs = 1
     image_list = []
-    while (True):
+    while True:
         flag, frame = cap.read()
         if not flag:
             break
@@ -81,15 +87,17 @@ def get_mov_all_images(file, frames, rgb=False):
 
 
 def images_to_video(images, frames, out_path, file, audio, reuse_audio):
-    if platform.system() == 'Windows':
+    if platform.system() == "Windows":
         # Use imageio with the 'libx264' codec on Windows
-        return images_to_video_imageio(images, frames, out_path, 'libx264', file, audio, reuse_audio)
-    elif platform.system() == 'Darwin':
+        return images_to_video_imageio(
+            images, frames, out_path, "libx264", file, audio, reuse_audio
+        )
+    elif platform.system() == "Darwin":
         # Use cv2 with the 'avc1' codec on Mac
-        return images_to_video_cv2(images, frames, out_path, 'avc1')
+        return images_to_video_cv2(images, frames, out_path, "avc1")
     else:
         # Use cv2 with the 'mp4v' codec on other operating systems as it's the most widely supported
-        return images_to_video_cv2(images, frames, out_path, 'mp4v')
+        return images_to_video_cv2(images, frames, out_path, "mp4v")
 
 
 def images_to_video_imageio(images, frames, out_path, codec, file, audio, reuse_audio):
@@ -99,12 +107,19 @@ def images_to_video_imageio(images, frames, out_path, codec, file, audio, reuse_
 
     audio_path, should_cleanup_audio = get_audio(file, audio, reuse_audio)
 
-    with imageio.v2.get_writer(out_path, format='ffmpeg', mode='I', fps=frames, codec=codec, audio_path=audio_path) as writer:
+    with imageio.v2.get_writer(
+        out_path,
+        format="ffmpeg",
+        mode="I",
+        fps=frames,
+        codec=codec,
+        audio_path=audio_path,
+    ) as writer:
         for img in images:
             writer.append_data(numpy.asarray(img))
 
     if should_cleanup_audio:
-        cleanup_audio()
+        cleanup_audio(audio_path)
 
     return out_path
 
@@ -128,3 +143,38 @@ def images_to_video_cv2(images, frames, out_path, codec):
         video.write(img)
     video.release()
     return out_path
+
+
+def save_video(
+    images,
+    fps,
+    mov_file,
+    audio,
+    reuse_audio,
+    extension=".mp4",
+):
+    if not os.path.exists(opts.data.get("mov2mov_output_dir", mov2mov_output_dir)):
+        os.makedirs(
+            opts.data.get("mov2mov_output_dir", mov2mov_output_dir),
+            exist_ok=True,
+        )
+
+    r_f = extension
+
+    logging.info(f"Start generating {r_f} file")
+
+    video = images_to_video(
+        images,
+        fps,
+        os.path.join(
+            opts.data.get("mov2mov_output_dir", mov2mov_output_dir),
+            str(int(time.time())) + r_f,
+        ),
+        mov_file,
+        audio,
+        reuse_audio,
+    )
+
+    logging.info(f"The generation is complete, the directory::{video}")
+
+    return video

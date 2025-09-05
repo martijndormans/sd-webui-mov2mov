@@ -29,9 +29,11 @@ from scripts import m2m_hook as patches
 from scripts import mov2mov
 from scripts.m2m_config import mov2mov_outpath_samples, mov2mov_output_dir
 from scripts.mov2mov import scripts_mov2mov
-from scripts.movie_editor import MovieEditor
+from scripts.features.movie_editor.ui import MovieEditorUI
+from scripts.features.movie_editor import editor as editor_logic
 from scripts.m2m_ui_common import create_output_panel
 from scripts.audio_transformers.voice_pitcher import generate_pitched_audio
+from scripts.features.audio.ui import AudioUI
 
 id_part = "mov2mov"
 
@@ -75,6 +77,7 @@ def on_ui_tabs():
         )
         extra_tabs.__enter__()
 
+        audio_ui = AudioUI(id_part)
         with gr.Tab(
             "Generation", id=f"{id_part}_generation"
         ) as mov2mov_generation_tab, ResizeHandleRow(equal_height=False):
@@ -275,31 +278,9 @@ def on_ui_tabs():
                         with gr.Row(
                             elem_id=f"{id_part}_accordions", elem_classes="accordions"
                         ):
-                            with gr.Accordion(label="Audio Layer", elem_id=f"{id_part}_audio_accordion", open=False):
-                                reuse_audio = gr.Checkbox(label="Reuse audio from input video", elem_id=f"{id_part}_reuse_audio", value=True)
-                                audio = gr.Audio(label="Audio for mov2mov", elem_id=f"{id_part}_audio", source="upload", visible=False)
-                                reuse_audio.change(
-                                    lambda checked: gr.update(visible=not checked),
-                                    inputs=reuse_audio,
-                                    outputs=audio,
-                                )
-                                with gr.Row():
-                                    pitch_audio = gr.Checkbox(label="Pitch audio", elem_id=f"{id_part}_pitch_audio", value=False)
-                                    pitch_step = gr.Number(label="Pitch step (default is 1)", minimum=0, maximum=3, value=1, precision=None, elem_id=f"{id_part}_pitch_step")
-                                    pitched_audio = gr.Audio(label="Pitched Audio", type="filepath", elem_id=f"{id_part}_pitched_audio")
-
-                                    # Bind events
-                                    pitch_audio.change(
-                                        fn=generate_pitched_audio,
-                                        inputs=[init_mov, audio, reuse_audio, pitch_step],
-                                        outputs=pitched_audio
-                                    )
-
-                                    pitch_step.change(
-                                        fn=generate_pitched_audio,
-                                        inputs=[init_mov, audio, reuse_audio, pitch_step],
-                                        outputs=pitched_audio
-                                    )
+                            reuse_audio, audio, pitch_audio, pitched_audio = (
+                                audio_ui.render(init_mov)
+                            )
                             scripts_mov2mov.setup_ui_for_section(category)
 
                     elif category == "override_settings":
@@ -309,8 +290,8 @@ def on_ui_tabs():
                             )
 
                     elif category == "scripts":
-                        editor = MovieEditor(id_part, init_mov, movie_frames)
-                        editor.render()
+                        editor_ui = MovieEditorUI(id_part, init_mov, movie_frames)
+                        editor_components = editor_ui.render()
                         with FormGroup(elem_id=f"{id_part}_script_container"):
                             custom_inputs = scripts_mov2mov.setup_ui()
 
@@ -349,13 +330,12 @@ def on_ui_tabs():
                     reuse_audio,
                     audio,
                     # editor
-                    editor.gr_enable_movie_editor,
-                    editor.gr_df,
-                    editor.gr_eb_weight,
+                    editor_components["enable_movie_editor"],
+                    editor_components["df"],
+                    editor_components["eb_weight"],
                 ]
                 + custom_inputs,
                 outputs=[
-                   
                     output_panel.video,
                     output_panel.infotext,
                     output_panel.html_log,
