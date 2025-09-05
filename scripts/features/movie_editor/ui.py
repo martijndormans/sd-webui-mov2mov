@@ -2,15 +2,19 @@ import platform
 
 import gradio as gr
 import pandas
-from PIL import Image
-from tqdm import tqdm
 
-from modules import shared, deepbooru
 from modules.ui_components import InputAccordion, ToolButton
 from scripts import m2m_util
+from scripts.features.movie_editor.editor import (
+    interrogate_keyframe,
+    deepbooru_keyframe,
+    add_keyframe_click,
+    remove_keyframe_click,
+    key_frame_interval_generate_click,
+)
 
 
-class MovieEditor:
+class MovieEditorUI:
     def __init__(self, id_part, gr_movie: gr.Video, gr_fps: gr.Slider):
         self.gr_eb_weight = None
         self.gr_df = None
@@ -160,83 +164,37 @@ class MovieEditor:
 
         data_frame.select(self.data_frame_select, data_frame, self.gr_frame_number)
 
+        interrogate.click(
+            fn=interrogate_keyframe,
+            inputs=[data_frame],
+            outputs=[data_frame],
+        )
+        deepbooru.click(
+            fn=deepbooru_keyframe,
+            inputs=[data_frame],
+            outputs=[data_frame],
+        )
         add_keyframe.click(
-            fn=self.add_keyframe_click,
+            fn=add_keyframe_click,
             inputs=[data_frame, self.gr_frame_number],
             outputs=[data_frame],
-            show_progress=False,
         )
         remove_keyframe.click(
-            fn=self.remove_keyframe_click,
+            fn=remove_keyframe_click,
             inputs=[data_frame],
             outputs=[data_frame],
-            show_progress=False,
         )
-
-        clear_keyframe.click(
-            fn=lambda df: df.drop(df.index, inplace=True),
-            inputs=[data_frame],
-            outputs=[data_frame],
-            show_progress=False,
-        )
-
         key_frame_interval_generate.click(
-            fn=self.key_frame_interval_generate_click,
+            fn=key_frame_interval_generate_click,
             inputs=[data_frame, key_frame_interval],
             outputs=[data_frame],
-            show_progress=True,
         )
 
-        interrogate.click(
-            fn=self.interrogate_keyframe,
-            inputs=[data_frame],
-            outputs=[data_frame],
-            show_progress=True,
-        )
-
-        deepbooru.click(
-            fn=self.deepbooru_keyframe,
-            inputs=[data_frame],
-            outputs=[data_frame],
-            show_progress=True,
-        )
-
-    def interrogate_keyframe(self, data_frame: pandas.DataFrame):
-        """
-        Interrogate key frame
-        """
-        bar = tqdm(total=len(data_frame))
-        for index, row in data_frame.iterrows():
-            if row["frame"] <= 0:
-                continue
-            bar.set_description(f'Interrogate key frame {row["frame"]}')
-            frame = row["frame"] - 1
-            image = self.frames[frame]
-            image = Image.fromarray(image)
-            prompt = shared.interrogator.interrogate(image.convert("RGB"))
-            data_frame.at[index, "prompt"] = prompt
-            bar.update(1)
-
-        return data_frame
-
-    def deepbooru_keyframe(self, data_frame: pandas.DataFrame):
-        """
-        Deepbooru key frame
-
-        """
-        bar = tqdm(total=len(data_frame))
-        for index, row in data_frame.iterrows():
-            if row["frame"] <= 0:
-                continue
-            bar.set_description(f'Interrogate key frame {row["frame"]}')
-            frame = row["frame"] - 1
-            image = self.frames[frame]
-            image = Image.fromarray(image)
-            prompt = deepbooru.model.tag(image)
-            data_frame.at[index, "prompt"] = prompt
-            bar.update(1)
-
-        return data_frame
+        return {
+            "enable_movie_editor": self.gr_enable_movie_editor,
+            "df": self.gr_df,
+            "eb_weight": self.gr_eb_weight,
+        }
 
     def data_frame_select(self, event: gr.SelectData, data_frame: pandas.DataFrame):
         row, col = event.index
@@ -247,57 +205,6 @@ class MovieEditor:
             return int(frame)
         else:
             return 0
-
-    def add_keyframe_click(self, data_frame: pandas.DataFrame, gr_frame_number: int):
-        """
-        Add a key frame to the data frame
-        """
-        if gr_frame_number < 1:
-            return data_frame
-
-        data_frame = data_frame[data_frame["frame"] > 0]
-
-        if gr_frame_number in data_frame["frame"].values:
-            return data_frame
-
-        row = {"id": len(data_frame), "frame": gr_frame_number, "prompt": ""}
-        data_frame.loc[len(data_frame)] = row
-
-        data_frame = data_frame.sort_values(by="frame").reset_index(drop=True)
-
-        data_frame["id"] = range(len(data_frame))
-
-        return data_frame
-
-    def remove_keyframe_click(self, data_frame: pandas.DataFrame):
-        """
-        Remove the selected key frame
-        """
-        if self.selected_data_frame < 0:
-            return data_frame
-
-        data_frame = data_frame.drop(self.selected_data_frame)
-
-        data_frame = data_frame.sort_values(by="frame").reset_index(drop=True)
-
-        data_frame["id"] = range(len(data_frame))
-
-        return data_frame
-
-    def key_frame_interval_generate_click(
-        self, data_frame: pandas.DataFrame, key_frame_interval: int
-    ):
-        if key_frame_interval < 1:
-            return data_frame
-
-        # 按照key_frame_interval的间隔添加关键帧
-        for i in range(0, self.frame_count, key_frame_interval):
-            data_frame = self.add_keyframe_click(data_frame, i + 1)
-
-        # 添加最后一帧
-        data_frame = self.add_keyframe_click(data_frame, self.frame_count)
-
-        return data_frame
 
     def movie_change(self, movie_path):
         if not movie_path:

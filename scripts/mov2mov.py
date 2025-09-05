@@ -1,84 +1,35 @@
-from contextlib import closing
-import os.path
-import platform
-import time
-import gradio as gr
-import PIL.Image
 import logging
-from tqdm import tqdm
-
-from ebsynth.ebsynth_generate import EbsynthGenerate
-import modules
+from contextlib import closing
 
 import cv2
-import numpy as np
+import gradio as gr
+import modules
+import modules.scripts as scripts
 import pandas
-from PIL import Image
-from modules import shared, processing
+from modules import processing, shared
 from modules.infotext_utils import create_override_settings_dict
 from modules.processing import (
+    Processed,
     StableDiffusionProcessingImg2Img,
     process_images,
 )
-from modules.shared import state
-import modules.scripts as scripts
-
+from modules.shared import opts, state
 from modules.ui_common import plaintext_to_html
-from scripts.m2m_util import calc_video_w_h, get_mov_all_images, images_to_video
+from PIL import Image
+
+from scripts.features.audio.audio import choose_audio
+from scripts.features.movie_editor.editor import process_movie_editor_mov2mov
 from scripts.m2m_config import mov2mov_output_dir
-import modules
-from ebsynth import Keyframe
-from modules.processing import Processed
-from modules.shared import opts
-from scripts.m2m_audio import choose_audio
+from scripts.m2m_util import calc_video_w_h, get_mov_all_images, save_video
 
 logger = logging.getLogger("mov2mov")
 
 scripts_mov2mov = scripts.ScriptRunner()
 
 
-def check_data_frame(df: pandas.DataFrame):
-    # 删除df的frame值为0的行
-    df = df[df["frame"] > 0]
-
-    # 判断df是否为空
-    if len(df) <= 0:
-        return False
-
-    return True
-
-
-def save_video(images, fps, mov_file, audio, reuse_audio, extension=".mp4",):
-    if not os.path.exists(
-        shared.opts.data.get("mov2mov_output_dir", mov2mov_output_dir)
-    ):
-        os.makedirs(
-            shared.opts.data.get("mov2mov_output_dir", mov2mov_output_dir),
-            exist_ok=True,
-        )
-
-    r_f = extension
-
-    logging.info(f"Start generating {r_f} file")
-
-    video = images_to_video(
-        images,
-        fps,
-        os.path.join(
-            shared.opts.data.get("mov2mov_output_dir", mov2mov_output_dir),
-            str(int(time.time())) + r_f,
-        ),
-        mov_file,
-        audio,
-        reuse_audio
-    )
-
-    logging.info(f"The generation is complete, the directory::{video}")
-
-    return video
-
-
-def process_mov2mov(p, mov_file, movie_frames, max_frames, resize_mode, w, h, audio, reuse_audio, args):
+def process_mov2mov(
+    p, mov_file, movie_frames, max_frames, resize_mode, w, h, audio, reuse_audio, args
+):
     processing.fix_seed(p)
     images = get_mov_all_images(mov_file, movie_frames)
     if not images:
@@ -119,98 +70,6 @@ def process_mov2mov(p, mov_file, movie_frames, max_frames, resize_mode, w, h, au
 
     video = save_video(generate_images, movie_frames, mov_file, audio, reuse_audio)
 
-    return video
-
-
-def process_keyframes(p, mov_file, fps, df, args):
-    processing.fix_seed(p)
-    images = get_mov_all_images(mov_file, fps)
-    if not images:
-        logger.warning("Failed to parse the video, please check")
-        return
-
-    # 通过宽高,缩放模式,预处理图片
-    images = [PIL.Image.fromarray(image) for image in images]
-    images = [
-        modules.images.resize_image(p.resize_mode, image, p.width, p.height)
-        for image in images
-    ]
-    images = [np.asarray(image) for image in images]
-
-    default_prompt = p.prompt
-    max_frames = len(df)
-
-    p.do_not_save_grid = True
-    state.job_count = max_frames  # * p.n_iter
-    generate_images = []
-
-    for i, row in df.iterrows():
-        p.prompt = default_prompt + row["prompt"]
-        frame = images[row["frame"] - 1]
-
-        state.job = f"{i + 1} out of {max_frames}"
-        if state.skipped:
-            state.skipped = False
-
-        if state.interrupted:
-            break
-
-        img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), "RGB")
-        p.init_images = [img]
-        proc = scripts_mov2mov.run(p, *args)
-        if proc is None:
-            print(f"current progress: {i + 1}/{max_frames}")
-            processed = process_images(p)
-            gen_image = processed.images[0]
-
-            if gen_image.height != p.height or gen_image.width != p.width:
-                logger.warning(
-                    f"The generated image size is inconsistent with the original image size, "
-                    f"please check the configuration parameters"
-                )
-                gen_image = gen_image.resize((p.width, p.height))
-
-            keyframe = Keyframe(row["frame"], np.asarray(gen_image), row["prompt"])
-            generate_images.append(keyframe)
-
-    # 由于生成图片可能会产生像素偏差,这里再对齐一次宽高
-    images = [PIL.Image.fromarray(image) for image in images]
-    images = [
-        (
-            image.resize(p.width, p.height)
-            if image.width != p.width or image.height != p.height
-            else image
-        )
-        for image in images
-    ]
-    images = [np.asarray(image) for image in images]
-
-    return generate_images, images
-
-
-def process_mov2mov_ebsynth(p, eb_generate, weight=4.0):
-    from ebsynth._ebsynth import task as EbsyncthRun
-
-    tasks = eb_generate.get_tasks(weight)
-    tasks_len = len(tasks)
-    state.job_count = tasks_len  # * p.n_iter
-
-    for i, task in tqdm(enumerate(tasks)):
-
-        state.job = f"{i + 1} out of {tasks_len}"
-        if state.skipped:
-            state.skipped = False
-
-        if state.interrupted:
-            break
-
-        result = EbsyncthRun(task.style, [(task.source, task.target, task.weight)])
-        eb_generate.append_generate_frames(task.key_frame_num, task.frame_num, result)
-        state.nextjob()
-
-    logging.info(f"Start merge frames")
-    result = eb_generate.merge_sequences()
-    video = save_video(result, eb_generate.fps)
     return video
 
 
@@ -299,35 +158,44 @@ def mov2mov(
         print(f"\nmov2mov: {prompt}", file=shared.progress_print_out)
 
     with closing(p):
-        if not enable_movie_editor:
-            final_audio, final_reuse_audio = choose_audio(pitch_audio, pitched_audio, reuse_audio, audio)
+        if enable_movie_editor:
+            generate_video, processed = process_movie_editor_mov2mov(
+                p,
+                # mov2mov simple
+                mov_file,
+                movie_frames,
+                max_frames,
+                resize_mode,
+                width,
+                height,
+                # audio
+                pitch_audio,
+                pitched_audio,
+                reuse_audio,
+                audio,
+                # editor
+                enable_movie_editor,
+                df,
+                eb_weight,
+                args,
+            )
+        else:
+            final_audio, final_reuse_audio = choose_audio(
+                pitch_audio, pitched_audio, reuse_audio, audio
+            )
             print(f"\nStart parsing the number of mov frames")
             generate_video = process_mov2mov(
-                p, mov_file, movie_frames, max_frames, resize_mode, width, height, final_audio, final_reuse_audio, args
+                p,
+                mov_file,
+                movie_frames,
+                max_frames,
+                resize_mode,
+                width,
+                height,
+                final_audio,
+                final_reuse_audio,
+                args,
             )
-            processed = Processed(p, [], p.seed, "")
-        else:
-            # editor
-            if platform.system() != "Windows":
-                raise Exception(
-                    "The Movie Editor is currently only supported on Windows"
-                )
-
-            # check df no frame
-            if not check_data_frame(df):
-                raise Exception("Please add a frame in the Movie Editor or disable it")
-
-            # sort df for index
-            df = df.sort_values(by="frame").reset_index(drop=True)
-
-            # generate keyframes
-            logging.info(f"Start generate keyframes")
-            keyframes, frames = process_keyframes(p, mov_file, movie_frames, df, args)
-            eb_generate = EbsynthGenerate(keyframes, frames, movie_frames)
-            logging.info(f"\nStart generate frames")
-
-            generate_video = process_mov2mov_ebsynth(p, eb_generate, weight=eb_weight)
-
             processed = Processed(p, [], p.seed, "")
 
     shared.total_tqdm.clear()
